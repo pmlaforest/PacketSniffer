@@ -3,12 +3,18 @@ Simple Sniffer with winpcap , prints ethernet , ip , tcp , udp and icmp headers 
 Author : Silver Moon ( m00n.silv3r@gmail.com ).
 */
 
+#if defined(_WIN64) || (_WIN32)
+#define _WINSOCK_DEPRECATED_NO_WARNINGS 1
+#define _CRT_SECURE_NO_WARNINGS 2 
+#endif
+
+
 #include <stdio.h>
 #include <ctype.h>
 #include <winsock2.h>   //need winsock for inet_ntoa and ntohs methods
+#include "protocol_headers.h"
 
 #define HAVE_REMOTE
-#include "protocol_headers.h"
 #include "pcap.h"  
 
 #define MAX_FILTER_STR 1000
@@ -247,7 +253,6 @@ int main()
 	struct pcap_pkthdr *header;
 	bpf_u_int32  netmask;
 	char chosen_filters[MAX_FILTER_STR];
-	int filter_flag;
 	int ret_filter_val = 0;
 
 	fopen_s(&logfile, "log.txt", "w");
@@ -424,6 +429,16 @@ int find_digit_in_nb(int number_to_scan)
 	return n;
 }
 
+void print_header_bytes(unsigned char* buffer, int size)
+{
+	printf("This is the bytes that compose the header: \n");
+	for (int byte_nb = 0; byte_nb < size; byte_nb++)
+	{
+		printf("%x ", buffer[byte_nb] & 0xff);
+	}
+	printf("\nsize:%d\n", size);
+}
+
 void print_ipv6_packet(unsigned char* Buffer, int Size)
 {
 	int iphdrlen = 0;
@@ -431,16 +446,22 @@ void print_ipv6_packet(unsigned char* Buffer, int Size)
 	IN6_ADDR ipv6_dest_addr;
 	char src_addr[50];
 	char dest_addr[50];
-	
+	unsigned int ipv6_flow_label;
+	unsigned char ipv6_tos;
+
 	ipv6hdr = (IPV6_HDR *)(Buffer + sizeof(ETHER_HDR));
 
-	//The version comes in the first niblet of the version's byte.
-	//See an ipv6 packet on Wireshark.
-	ipv6hdr->ipv6_version = ipv6hdr->ipv6_version >> 4;
+	print_header_bytes(Buffer + sizeof(ETHER_HDR), sizeof(IPV6_HDR));
 
-	for (int word_ip_v6 = 0; word_ip_v6 < 8; word_ip_v6++) {
-		ipv6_src_addr.u.Word[word_ip_v6] = ipv6hdr->ipv6_source_addr[word_ip_v6];
-		ipv6_dest_addr.u.Word[word_ip_v6] = ipv6hdr->ipv6_source_addr[word_ip_v6];
+	// ipv6 type of service and flow label
+	ipv6_tos = (ipv6hdr->ipv6_tos1 & 0x0f) + ((ipv6hdr->ipv6_tos2 & 0x0f) << 4);	
+	ipv6_flow_label = ((ipv6hdr->ipv6_flow_label1 & 0x0f) << 16) + ((ipv6hdr->ipv6_flow_label2 & 0xff00) >> 8) + ((ipv6hdr->ipv6_flow_label2 & 0x00ff) << 8);
+	ipv6hdr->ipv6_payload = ((ipv6hdr->ipv6_payload & 0xff00) >> 8) + ((ipv6hdr->ipv6_payload & 0x00ff) << 8);
+
+	// Constructing src and dest addresses
+	for (int word_ipv6 = 0; word_ipv6 < 8; word_ipv6++) {
+		ipv6_src_addr.u.Word[word_ipv6] = ipv6hdr->ipv6_source_addr[word_ipv6];
+		ipv6_dest_addr.u.Word[word_ipv6] = ipv6hdr->ipv6_dest_addr[word_ipv6];
 	}
 
 	memset(src_addr, '\0', sizeof(src_addr));
@@ -454,9 +475,9 @@ void print_ipv6_packet(unsigned char* Buffer, int Size)
 	fprintf(logfile, "\n");
 	fprintf(logfile, "IPv6 Header\n");
 	fprintf(logfile, " |-IP Version : %d\n", (unsigned int)ipv6hdr->ipv6_version);
-	fprintf(logfile, " |-Type Of Service : %d\n", (unsigned int)ipv6hdr->ipv6_tos);
-	fprintf(logfile, " |-Flow Label : %d\n", (unsigned int)ipv6hdr->ipv6_flow_label);
-	fprintf(logfile, " |-Payload : %d\n", (unsigned int)ipv6hdr->ipv6_payload);
+	fprintf(logfile, " |-Type Of Service : %d\n", (unsigned int)ipv6_tos);
+	fprintf(logfile, " |-Flow Label : %d\n", (unsigned int)ipv6_flow_label);
+	fprintf(logfile, " |-Payload : %hu\n", (unsigned short)ipv6hdr->ipv6_payload);
 	fprintf(logfile, " |-Next header : %d\n", (unsigned int)ipv6hdr->ipv6_next_header);
 	fprintf(logfile, " |-Hop limit : %d\n", (unsigned int)ipv6hdr->ipv6_hop_limit);
 	fprintf(logfile, " |-Source address : %s\n", src_addr);

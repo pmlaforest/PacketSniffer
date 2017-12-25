@@ -4,7 +4,8 @@
 #include <sys/types.h>
 
 // Set the packing to a 1 byte boundary
-//#include "pshpack1.h"
+#include "pshpack1.h"
+
 //Ethernet Header
 typedef struct ethernet_header
 {
@@ -90,16 +91,20 @@ typedef struct icmp_hdr
 	USHORT seq;
 } ICMP_HDR;
 
-#pragma pack(2)
-
 typedef struct ipv6_hdr
 {
-	unsigned char ipv6_version;
-	unsigned char ipv6_tos;
-	unsigned int ipv6_flow_label : 20;
+	unsigned char ipv6_tos1 : 4;
+	unsigned char ipv6_version : 4;
+	
+	unsigned char ipv6_flow_label1 : 4;
+	unsigned char ipv6_tos2 : 4;
+
+	unsigned short ipv6_flow_label2;
+
 	unsigned short ipv6_payload;
 	unsigned char ipv6_next_header;
 	unsigned char ipv6_hop_limit;
+
 	unsigned short ipv6_source_addr[8];
 	unsigned short ipv6_dest_addr[8];
 } IPV6_HDR;
